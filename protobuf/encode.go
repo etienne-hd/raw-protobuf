@@ -5,17 +5,19 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
-type protobufFields map[uint]*protobufField
+type protobufFields map[int32]*protobufField
 
 type protobufField struct {
-	num      uint
-	value    any
+	num       int32
+	value     any
 	subFields protobufFields
 }
 
-func putField(fields protobufFields, value any, nums ...uint) error {
+func putField(fields protobufFields, value any, nums ...int32) error {
 	if len(nums) == 0 {
 		return errors.New("nums cannot be empty")
 	}
@@ -39,7 +41,7 @@ func putField(fields protobufFields, value any, nums ...uint) error {
 	// Intermediate level: create the parent if necessary
 	if field == nil {
 		field = &protobufField{
-			num:      num,
+			num:       num,
 			subFields: make(protobufFields),
 		}
 
@@ -54,26 +56,26 @@ func putField(fields protobufFields, value any, nums ...uint) error {
 	return putField(field.subFields, value, nums[1:]...)
 }
 
-func getNums(t reflect.StructField) ([]uint, error) {
+func getNums(t reflect.StructField) ([]int32, error) {
 	rawNums := t.Tag.Get("nums")
 	if rawNums == "" {
 		return nil, nil
 	}
 
-	var nums []uint
+	var nums []int32
 	for _, rawNum := range strings.Split(rawNums, ".") {
 		num, err := strconv.ParseInt(rawNum, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 
-		nums = append(nums, uint(num))
+		nums = append(nums, int32(num))
 	}
 
 	return nums, nil
 }
 
-func parseFields(fields protobufFields, value any, nums ...uint) error {
+func parseFields(fields protobufFields, value any, nums ...int32) error {
 	t := reflect.TypeOf(value)
 	v := reflect.ValueOf(value)
 
@@ -88,7 +90,7 @@ func parseFields(fields protobufFields, value any, nums ...uint) error {
 		}
 
 		// append nums + fieldNums
-		currentNums := append([]uint{}, nums...)
+		currentNums := append([]int32{}, nums...)
 		currentNums = append(currentNums, fieldNums...)
 
 		// sub struct implementation
@@ -118,11 +120,75 @@ func parse(value any) (protobufFields, error) {
 	return fields, nil
 }
 
+func encodeValue(value any) []byte {
+	switch value := value.(type) {
+	case int32:
+		return protowire.AppendVarint(nil, uint64(value))
+	case int64:
+		return protowire.AppendVarint(nil, uint64(value))
+	case uint32:
+		return protowire.AppendVarint(nil, uint64(value))
+	case uint64:
+		return protowire.AppendVarint(nil, uint64(value))
+	case string:
+		return protowire.AppendString(nil, value)
+	case bool:
+		if value {
+			return protowire.AppendVarint(nil, uint64(1))
+		}
+		return protowire.AppendVarint(nil, uint64(0))
+	case float32:
+		return protowire.AppendFixed32(nil, uint32(value))
+	case float64:
+		return protowire.AppendFixed64(nil, uint64(value))
+	default:
+		return []byte{}
+	}
+}
+
+func getWireType(value any) protowire.Type {
+	switch value.(type) {
+	case int32, int64, uint32, uint64, bool:
+		return protowire.VarintType
+	case string:
+		return protowire.BytesType
+	case float32:
+		return protowire.Fixed32Type
+	case float64:
+		return protowire.Fixed64Type
+	default:
+		return 0
+	}
+}
+
+// TODO: Implement slices
+func encodeField(field *protobufField) (buffer []byte) {
+
+	// sub struct
+	if field.subFields != nil {
+		buffer = protowire.AppendTag(buffer, protowire.Number(field.num), protowire.BytesType)
+		buffer = protowire.AppendBytes(buffer, encode(field.subFields))
+		return
+	}
+
+	buffer = protowire.AppendTag(buffer, protowire.Number(field.num), getWireType(field.value))
+	buffer = append(buffer, encodeValue(field.value)...)
+	return
+}
+
+func encode(fields protobufFields) (buffer []byte) {
+	for _, field := range fields {
+		buffer = append(buffer, encodeField(field)...)
+	}
+
+	return
+}
+
 func Marshal(value any) ([]byte, error) {
-	_, err := parse(value)
+	fields, err := parse(value)
 	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	return encode(fields), nil
 }
