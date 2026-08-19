@@ -7,13 +7,15 @@ import (
 	"strings"
 )
 
+type protobufFields map[uint]*protobufField
+
 type protobufField struct {
 	num      uint
 	value    any
-	subField map[uint]*protobufField
+	subFields protobufFields
 }
 
-func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
+func putField(fields protobufFields, value any, nums ...uint) error {
 	if len(nums) == 0 {
 		return errors.New("nums cannot be empty")
 	}
@@ -38,18 +40,18 @@ func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
 	if field == nil {
 		field = &protobufField{
 			num:      num,
-			subField: make(map[uint]*protobufField),
+			subFields: make(protobufFields),
 		}
 
 		fields[num] = field
 	}
 
 	// A field cannot contain both a value and sub-fields
-	if field.subField == nil {
+	if field.subFields == nil {
 		return errors.New("a field already exist")
 	}
 
-	return putField(field.subField, value, nums[1:]...)
+	return putField(field.subFields, value, nums[1:]...)
 }
 
 func getNums(t reflect.StructField) ([]uint, error) {
@@ -71,7 +73,7 @@ func getNums(t reflect.StructField) ([]uint, error) {
 	return nums, nil
 }
 
-func parseFields(fields map[uint]*protobufField, value any, nums ...uint) error {
+func parseFields(fields protobufFields, value any, nums ...uint) error {
 	t := reflect.TypeOf(value)
 	v := reflect.ValueOf(value)
 
@@ -106,8 +108,8 @@ func parseFields(fields map[uint]*protobufField, value any, nums ...uint) error 
 	return nil
 }
 
-func parse(value any) (map[uint]*protobufField, error) {
-	fields := make(map[uint]*protobufField)
+func parse(value any) (protobufFields, error) {
+	fields := make(protobufFields)
 
 	if err := parseFields(fields, value); err != nil {
 		return nil, err

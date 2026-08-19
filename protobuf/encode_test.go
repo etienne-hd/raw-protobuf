@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func assertField(t *testing.T, fields map[uint]*protobufField, value any, nums ...uint) {
+func assertField(t *testing.T, fields protobufFields, value any, nums ...uint) {
 	t.Helper()
 
 	field := fields
@@ -21,15 +21,15 @@ func assertField(t *testing.T, fields map[uint]*protobufField, value any, nums .
 			continue
 		}
 
-		if field[num].subField == nil {
+		if field[num].subFields == nil {
 			t.Fatalf("field %d has no subField", num)
 		}
-		field = field[num].subField
+		field = field[num].subFields
 	}
 }
 
 func TestPutField(t *testing.T) {
-	fields := make(map[uint]*protobufField)
+	fields := make(protobufFields)
 
 	nums := []uint{1, 2, 3}
 	value := 123
