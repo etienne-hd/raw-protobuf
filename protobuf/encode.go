@@ -2,7 +2,6 @@ package protobuf
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,21 +11,6 @@ type protobufField struct {
 	num      uint
 	value    any
 	subField map[uint]*protobufField
-}
-
-// DEBUG
-func showTree(fields map[uint]*protobufField, depth uint) {
-	for _, field := range fields {
-		for i := uint(0); i < depth; i++ {
-			fmt.Print(" ")
-		}
-		if len(field.subField) > 0 {
-			fmt.Printf("%d\\\n", field.num)
-			showTree(field.subField, depth+1)
-		} else {
-			fmt.Printf("%d\n", field.num)
-		}
-	}
 }
 
 func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
@@ -47,7 +31,6 @@ func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
 			num:   num,
 			value: value,
 		}
-
 		return nil
 	}
 
@@ -66,7 +49,7 @@ func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
 		return errors.New("a field already exist")
 	}
 
-	return putField(fields[nums[0]].subField, value, nums[1:]...)
+	return putField(field.subField, value, nums[1:]...)
 }
 
 func getNums(t reflect.StructField) ([]uint, error) {
@@ -108,7 +91,9 @@ func parseFields(fields map[uint]*protobufField, value any, nums ...uint) error 
 
 		// sub struct implementation
 		if t.Field(i).Type.Kind() == reflect.Struct {
-			parseFields(fields, v.Field(i).Interface(), currentNums...)
+			if err := parseFields(fields, v.Field(i).Interface(), currentNums...); err != nil {
+				return err
+			}
 			continue
 		}
 
