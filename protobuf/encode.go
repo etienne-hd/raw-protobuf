@@ -3,6 +3,9 @@ package protobuf
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
 )
 
 type protobufField struct {
@@ -10,7 +13,6 @@ type protobufField struct {
 	value    any
 	subField map[uint]*protobufField
 }
-
 
 // DEBUG
 func showTree(fields map[uint]*protobufField, depth uint) {
@@ -67,8 +69,48 @@ func putField(fields map[uint]*protobufField, value any, nums ...uint) error {
 	return putField(fields[nums[0]].subField, value, nums[1:]...)
 }
 
+func getNums(t reflect.StructField) ([]uint, error) {
+	rawNums := t.Tag.Get("nums")
+	if rawNums == "" {
+		return nil, nil
+	}
+
+	var nums []uint
+	for _, rawNum := range strings.Split(rawNums, ".") {
+		num, err := strconv.ParseInt(rawNum, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		nums = append(nums, uint(num))
+	}
+
+	return nums, nil
+}
+
+// TODO: sub struct implementation
 func parse(value any) (map[uint]*protobufField, error) {
 	fields := make(map[uint]*protobufField)
+
+	t := reflect.TypeOf(value)
+	v := reflect.ValueOf(value)
+
+	for i := 0; i < t.NumField(); i++ {
+		nums, err := getNums(t.Field(i))
+		if err != nil {
+			return nil, err
+		}
+		// tag "nums" not found (skip)
+		if nums == nil {
+			continue
+		}
+
+		err = putField(fields, v.Field(i).Interface(), nums...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return fields, nil
 }
 
