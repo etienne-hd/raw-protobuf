@@ -88,27 +88,44 @@ func getNums(t reflect.StructField) ([]uint, error) {
 	return nums, nil
 }
 
-// TODO: sub struct implementation
-func parse(value any) (map[uint]*protobufField, error) {
-	fields := make(map[uint]*protobufField)
-
+func parseFields(fields map[uint]*protobufField, value any, nums ...uint) error {
 	t := reflect.TypeOf(value)
 	v := reflect.ValueOf(value)
 
 	for i := 0; i < t.NumField(); i++ {
-		nums, err := getNums(t.Field(i))
+		fieldNums, err := getNums(t.Field(i))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// tag "nums" not found (skip)
-		if nums == nil {
+		if fieldNums == nil {
 			continue
 		}
 
-		err = putField(fields, v.Field(i).Interface(), nums...)
-		if err != nil {
-			return nil, err
+		// append nums + fieldNums
+		currentNums := append([]uint{}, nums...)
+		currentNums = append(currentNums, fieldNums...)
+
+		// sub struct implementation
+		if t.Field(i).Type.Kind() == reflect.Struct {
+			parseFields(fields, v.Field(i).Interface(), currentNums...)
+			continue
 		}
+
+		// insert field into fields
+		err = putField(fields, v.Field(i).Interface(), currentNums...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parse(value any) (map[uint]*protobufField, error) {
+	fields := make(map[uint]*protobufField)
+
+	if err := parseFields(fields, value); err != nil {
+		return nil, err
 	}
 
 	return fields, nil

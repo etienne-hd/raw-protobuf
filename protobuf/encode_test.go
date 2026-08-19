@@ -68,12 +68,12 @@ func TestParse(t *testing.T) {
 			Name: "Étienne",
 			Age:  20,
 		}
-	
+
 		fields, err := parse(person)
 		if err != nil {
 			t.Fatalf("parse() returned an unexpected error: %v", err)
 		}
-	
+
 		assertField(t, fields, person.Name, 1)
 		assertField(t, fields, person.Age, 2)
 	}
@@ -86,12 +86,12 @@ func TestParse(t *testing.T) {
 			Name: "Étienne",
 			Age:  20,
 		}
-	
+
 		fields, err := parse(person)
 		if err != nil {
 			t.Fatalf("parse() returned an unexpected error: %v", err)
 		}
-	
+
 		assertField(t, fields, person.Name, 1, 1, 1, 1, 1)
 		assertField(t, fields, person.Age, 2)
 	}
@@ -99,17 +99,17 @@ func TestParse(t *testing.T) {
 	{
 		person := struct {
 			Name string
-			Age  uint   `nums:"2"`
+			Age  uint `nums:"2"`
 		}{
 			Name: "Étienne",
 			Age:  20,
 		}
-	
+
 		fields, err := parse(person)
 		if err != nil {
 			t.Fatalf("parse() returned an unexpected error: %v", err)
 		}
-	
+
 		assertField(t, fields, person.Age, 2)
 	}
 
@@ -121,12 +121,12 @@ func TestParse(t *testing.T) {
 			Name: "Étienne",
 			Age:  20,
 		}
-	
+
 		fields, err := parse(person)
 		if err != nil {
 			t.Fatalf("parse() returned an unexpected error: %v", err)
 		}
-	
+
 		if len(fields) > 0 {
 			t.Fatalf("field length = %v, want %v", len(fields), 0)
 		}
@@ -140,10 +140,32 @@ func TestParse(t *testing.T) {
 			Name: "Étienne",
 			Age:  20,
 		}
-	
+
 		_, err := parse(person)
 		if err == nil {
 			t.Fatalf("parse() allowed unexpected nums")
 		}
+	}
+
+	{
+		type A struct {
+			Test string `nums:"1.5.12"`
+		}
+		type B struct {
+			SubStruct A `nums:"9.1.6"`
+		}
+
+		b := B{
+			SubStruct: A{
+				Test: "Hello, World!",
+			},
+		}
+
+		fields, err := parse(b)
+		if err != nil {
+			t.Fatalf("parse() returned an unexpected error: %v", err)
+		}
+
+		assertField(t, fields, b.SubStruct.Test, 9, 1, 6, 1, 5, 12)
 	}
 }
