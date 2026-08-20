@@ -10,10 +10,10 @@ import (
 type protobufFields []*protobufField
 
 type protobufField struct {
-	num         int32
-	values      []any
-	subFields   protobufFields
-	subMessages []protobufFields
+	num      int32
+	values   []any
+	fields   protobufFields
+	messages []protobufFields
 }
 
 func getSliceType(v reflect.Value) reflect.Kind {
@@ -53,18 +53,19 @@ func getNums(t reflect.StructField) ([]int32, error) {
 	return nums, nil
 }
 
-func getValues(value any) (values []any) {
+func getValues(value any) []any {
 	v := reflect.ValueOf(value)
 
-	if v.Kind() == reflect.Slice {
-		for i := 0; i < v.Len(); i++ {
-			values = append(values, v.Index(i).Interface())
-		}
-		return
+	if v.Kind() != reflect.Slice {
+		return []any{value}
 	}
 
-	values = append(values, value)
-	return
+	values := make([]any, 0, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		values = append(values, v.Index(i).Interface())
+	}
+
+	return values
 }
 
 func insertField(fields *protobufFields, value any, nums ...int32) error {
@@ -78,14 +79,14 @@ func insertField(fields *protobufFields, value any, nums ...int32) error {
 
 		// value is a struct
 		if v.Kind() == reflect.Struct {
-			subFields, err := parseFields(value)
+			subFields, err := parse(value)
 			if err != nil {
 				return err
 			}
 
 			field := &protobufField{
-				num:         nums[0],
-				subMessages: []protobufFields{subFields},
+				num:      nums[0],
+				messages: []protobufFields{subFields},
 			}
 
 			*fields = append(*fields, field)
@@ -95,17 +96,17 @@ func insertField(fields *protobufFields, value any, nums ...int32) error {
 		// value is a slice of struct
 		if v.Kind() == reflect.Slice && getSliceType(v) == reflect.Struct {
 			field := &protobufField{
-				num:         nums[0],
-				subMessages: []protobufFields{},
+				num:      nums[0],
+				messages: []protobufFields{},
 			}
 
 			for i := 0; i < v.Len(); i++ {
-				subFields, err := parseFields(v.Index(i).Interface())
+				subFields, err := parse(v.Index(i).Interface())
 				if err != nil {
 					return err
 				}
 
-				field.subMessages = append(field.subMessages, subFields)
+				field.messages = append(field.messages, subFields)
 			}
 
 			*fields = append(*fields, field)
@@ -113,9 +114,8 @@ func insertField(fields *protobufFields, value any, nums ...int32) error {
 		}
 
 		field := &protobufField{
-			num:       nums[0],
-			values:    getValues(value),
-			subFields: nil,
+			num:    nums[0],
+			values: getValues(value),
 		}
 
 		*fields = append(*fields, field)
@@ -136,21 +136,25 @@ func insertField(fields *protobufFields, value any, nums ...int32) error {
 
 	if nextField == nil {
 		nextField = &protobufField{
-			num:       nums[0],
-			subFields: make(protobufFields, 0),
+			num:    nums[0],
+			fields: make(protobufFields, 0),
 		}
 
 		*fields = append(*fields, nextField)
 	}
 
-	return insertField(&nextField.subFields, value, nums[1:]...)
+	return insertField(&nextField.fields, value, nums[1:]...)
 }
 
-func parseFields(value any) (protobufFields, error) {
-	fields := make(protobufFields, 0)
-
+func parse(value any) (protobufFields, error) {
 	t := reflect.TypeOf(value)
 	v := reflect.ValueOf(value)
+
+	if v.Kind() != reflect.Struct {
+		return nil, errors.New("value must be a struct")
+	}
+
+	fields := make(protobufFields, 0)
 
 	for i := 0; i < t.NumField(); i++ {
 		nums, err := getNums(t.Field(i))
@@ -169,16 +173,6 @@ func parseFields(value any) (protobufFields, error) {
 	}
 
 	return fields, nil
-}
-
-func parse(value any) (protobufFields, error) {
-	v := reflect.ValueOf(value)
-
-	if v.Kind() != reflect.Struct {
-		return nil, errors.New("value must be a struct")
-	}
-
-	return parseFields(value)
 }
 
 func Marshal(value any) ([]byte, error) {
