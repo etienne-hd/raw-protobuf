@@ -10,6 +10,12 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
+var (
+	errInvalidType    = errors.New("invalid data type")
+	errNumsEmpty      = errors.New("nums cannot be empty")
+	errValueNotStruct = errors.New("value must be a struct")
+)
+
 type protobufFields map[int32]*protobufField
 
 type protobufField struct {
@@ -95,7 +101,7 @@ func makeField(num int32, value any) (*protobufField, error) {
 
 func insertField(fields protobufFields, value any, nums ...int32) error {
 	if len(nums) == 0 {
-		return errors.New("nums cannot be empty")
+		return errNumsEmpty
 	}
 
 	num := nums[0]
@@ -103,7 +109,7 @@ func insertField(fields protobufFields, value any, nums ...int32) error {
 	// Insert value
 	if len(nums) == 1 {
 		if _, ok := fields[num]; ok {
-			return errors.New("values and fields cannot be used at the same time")
+			return errors.New("values and fields cannot be used at the same time") // TODO: refactor
 		}
 
 		field, err := makeField(num, value)
@@ -120,10 +126,10 @@ func insertField(fields protobufFields, value any, nums ...int32) error {
 	field, ok := fields[num]
 	if ok {
 		if field.values != nil {
-			return errors.New("values and fields cannot be used at the same time")
+			return errors.New("values and fields cannot be used at the same time") // TODO: refactor
 		}
 		if field.fields == nil {
-			return errors.New("messages and fields cannot be used at the same time")
+			return errors.New("messages and fields cannot be used at the same time") // TODO: refactor
 		}
 		nextField = field
 	}
@@ -145,7 +151,7 @@ func parse(value any) (protobufFields, error) {
 	v := reflect.ValueOf(value)
 
 	if v.Kind() != reflect.Struct {
-		return nil, errors.New("value must be a struct")
+		return nil, errValueNotStruct
 	}
 
 	fields := make(protobufFields)
@@ -206,7 +212,7 @@ func encodeValue(num int32, value any) ([]byte, error) {
 		b = protowire.AppendFixed64(b, math.Float64bits(value))
 
 	default:
-		return nil, errors.New("unsupported type")
+		return nil, errInvalidType
 	}
 
 	return b, nil
