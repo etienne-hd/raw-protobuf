@@ -2,9 +2,12 @@ package protobuf
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 type protobufFields map[int32]*protobufField
@@ -166,11 +169,112 @@ func parse(value any) (protobufFields, error) {
 	return fields, nil
 }
 
+func encodeValue(num int32, value any) ([]byte, error) {
+	var b []byte
+
+	switch value := value.(type) {
+	case int32, int64, uint32, uint64, bool:
+		b = protowire.AppendTag(b, protowire.Number(num), protowire.VarintType)
+
+		switch value := value.(type) {
+		case int32:
+			b = protowire.AppendVarint(b, uint64(value))
+		case int64:
+			b = protowire.AppendVarint(b, uint64(value))
+		case uint32:
+			b = protowire.AppendVarint(b, uint64(value))
+		case uint64:
+			b = protowire.AppendVarint(b, uint64(value))
+		case bool:
+			if value {
+				b = protowire.AppendVarint(b, 1)
+			} else {
+				b = protowire.AppendVarint(b, 0)
+			}
+		}
+
+	case string:
+		b = protowire.AppendTag(b, protowire.Number(num), protowire.BytesType)
+		b = protowire.AppendString(b, value)
+
+	case float32:
+		b = protowire.AppendTag(b, protowire.Number(num), protowire.Fixed32Type)
+		b = protowire.AppendFixed32(b, math.Float32bits(value))
+
+	case float64:
+		b = protowire.AppendTag(b, protowire.Number(num), protowire.Fixed64Type)
+		b = protowire.AppendFixed64(b, math.Float64bits(value))
+
+	default:
+		return nil, errors.New("unsupported type")
+	}
+
+	return b, nil
+}
+
+func encodeField(field *protobufField) ([]byte, error) {
+	var b []byte
+
+	if field.values != nil {
+		for _, value := range field.values {
+			encodedValue, err := encodeValue(field.num, value)
+			if err != nil {
+				return nil, err
+			}
+
+			b = append(b, encodedValue...)
+		}
+		return b, nil
+	}
+
+	if field.fields != nil {
+		for _, subField := range field.fields {
+			b = protowire.AppendTag(b, protowire.Number(field.num), protowire.BytesType)
+
+			rawField, err := encodeField(subField)
+			if err != nil {
+				return nil, err
+			}
+
+			b = protowire.AppendBytes(b, rawField)
+		}
+		return b, nil
+	}
+
+	for _, message := range field.messages {
+		b = protowire.AppendTag(b, protowire.Number(field.num), protowire.BytesType)
+
+		rawMessage, err := encode(message)
+		if err != nil {
+			return nil, err
+		}
+
+		b = protowire.AppendBytes(b, rawMessage)
+	}
+
+	return b, nil
+}
+
+func encode(fields protobufFields) ([]byte, error) {
+	b := []byte{}
+
+	for _, field := range fields {
+		encodedField, err := encodeField(field)
+		if err != nil {
+			return nil, err
+		}
+
+		b = append(b, encodedField...)
+	}
+
+	return b, nil
+}
+
 func Marshal(value any) ([]byte, error) {
-	_, err := parse(value)
+	fields, err := parse(value)
 	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	return encode(fields)
 }
