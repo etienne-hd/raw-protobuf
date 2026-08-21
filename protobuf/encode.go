@@ -7,30 +7,13 @@ import (
 	"strings"
 )
 
-type protobufFields []*protobufField
+type protobufFields map[int32]*protobufField
 
 type protobufField struct {
 	num      int32
 	values   []any
 	fields   protobufFields
 	messages []protobufFields
-}
-
-func getSliceType(v reflect.Value) reflect.Kind {
-	if v.Kind() != reflect.Slice {
-		return reflect.Invalid
-	}
-
-	t := reflect.Invalid
-	for i := 0; i < v.Len(); i++ {
-		// []any not accepted
-		currentType := v.Index(i).Kind()
-		if currentType != t && t != reflect.Invalid {
-			return reflect.Invalid
-		}
-		t = currentType
-	}
-	return t
 }
 
 func getNums(t reflect.StructField) ([]int32, error) {
@@ -68,82 +51,90 @@ func getValues(value any) []any {
 	return values
 }
 
-func insertField(fields *protobufFields, value any, nums ...int32) error {
+func makeField(num int32, value any) (*protobufField, error) {
+	v := reflect.ValueOf(value)
+
+	if v.Kind() == reflect.Struct {
+		subFields, err := parse(value)
+		if err != nil {
+			return nil, err
+		}
+
+		return &protobufField{
+			num:      num,
+			messages: []protobufFields{subFields},
+		}, nil
+	}
+
+	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct {
+		field := &protobufField{
+			num:      num,
+			messages: make([]protobufFields, 0, v.Len()),
+		}
+
+		for i := 0; i < v.Len(); i++ {
+			subFields, err := parse(v.Index(i).Interface())
+			if err != nil {
+				return nil, err
+			}
+
+			field.messages = append(field.messages, subFields)
+		}
+
+		return field, nil
+	}
+
+	return &protobufField{
+		num:    num,
+		values: getValues(value),
+	}, nil
+}
+
+func insertField(fields protobufFields, value any, nums ...int32) error {
 	if len(nums) == 0 {
 		return errors.New("nums cannot be empty")
 	}
 
+	num := nums[0]
+
 	// Insert value
 	if len(nums) == 1 {
-		v := reflect.ValueOf(value)
-
-		// value is a struct
-		if v.Kind() == reflect.Struct {
-			subFields, err := parse(value)
-			if err != nil {
-				return err
-			}
-
-			field := &protobufField{
-				num:      nums[0],
-				messages: []protobufFields{subFields},
-			}
-
-			*fields = append(*fields, field)
-			return nil
+		if _, ok := fields[num]; ok {
+			return errors.New("values and fields cannot be used at the same time")
 		}
 
-		// value is a slice of struct
-		if v.Kind() == reflect.Slice && getSliceType(v) == reflect.Struct {
-			field := &protobufField{
-				num:      nums[0],
-				messages: []protobufFields{},
-			}
-
-			for i := 0; i < v.Len(); i++ {
-				subFields, err := parse(v.Index(i).Interface())
-				if err != nil {
-					return err
-				}
-
-				field.messages = append(field.messages, subFields)
-			}
-
-			*fields = append(*fields, field)
-			return nil
+		field, err := makeField(num, value)
+		if err != nil {
+			return err
 		}
 
-		field := &protobufField{
-			num:    nums[0],
-			values: getValues(value),
-		}
-
-		*fields = append(*fields, field)
+		fields[num] = field
 		return nil
 	}
 
-	// Create fields
+	// Create field
 	var nextField *protobufField
-	for _, field := range *fields {
-		if field.num == nums[0] {
-			if field.values != nil {
-				return errors.New("values and subFields cannot be used at the same time")
-			}
-
-			nextField = field
+	field, ok := fields[num]
+	if ok {
+		if field.values != nil {
+			return errors.New("values and fields cannot be used at the same time")
 		}
+		if field.fields == nil {
+			return errors.New("messages and fields cannot be used at the same time")
+		}
+		nextField = field
 	}
 
 	if nextField == nil {
 		nextField = &protobufField{
-			num:    nums[0],
-			fields: make(protobufFields, 0),
+			num:    num,
+			fields: make(protobufFields),
 		}
 
-		*fields = append(*fields, nextField)
+		fields[num] = nextField
 	}
 
-	return insertField(&nextField.fields, value, nums[1:]...)
+	return insertField(nextField.fields, value, nums[1:]...)
 }
 
 func parse(value any) (protobufFields, error) {
@@ -154,7 +145,7 @@ func parse(value any) (protobufFields, error) {
 		return nil, errors.New("value must be a struct")
 	}
 
-	fields := make(protobufFields, 0)
+	fields := make(protobufFields)
 
 	for i := 0; i < t.NumField(); i++ {
 		nums, err := getNums(t.Field(i))
@@ -167,7 +158,7 @@ func parse(value any) (protobufFields, error) {
 			continue
 		}
 
-		if err := insertField(&fields, v.Field(i).Interface(), nums...); err != nil {
+		if err := insertField(fields, v.Field(i).Interface(), nums...); err != nil {
 			return nil, err
 		}
 	}
