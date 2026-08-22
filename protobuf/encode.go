@@ -14,6 +14,7 @@ var (
 	errInvalidType    = errors.New("invalid data type")
 	errNumsEmpty      = errors.New("nums cannot be empty")
 	errValueNotStruct = errors.New("value must be a struct")
+	errInvalidPointer = errors.New("invalid pointer")
 )
 
 type protobufFields map[int32]*protobufField
@@ -48,7 +49,19 @@ func getNums(t reflect.StructField) ([]int32, error) {
 func getValues(value any) []any {
 	v := reflect.ValueOf(value)
 
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return []any{}
+		}
+		return getValues(v.Elem().Interface())
+	}
+
 	if v.Kind() != reflect.Slice {
+		return []any{value}
+	}
+
+	// []byte
+	if v.Type().Elem().Kind() == reflect.Uint8 {
 		return []any{value}
 	}
 
@@ -149,6 +162,13 @@ func insertField(fields protobufFields, value any, nums ...int32) error {
 func parse(value any) (protobufFields, error) {
 	t := reflect.TypeOf(value)
 	v := reflect.ValueOf(value)
+
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return nil, errInvalidPointer
+		}
+		return parse(v.Elem().Interface())
+	}
 
 	if v.Kind() != reflect.Struct {
 		return nil, errValueNotStruct
