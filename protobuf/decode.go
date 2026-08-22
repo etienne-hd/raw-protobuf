@@ -4,12 +4,6 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-type Field struct {
-	WireType protowire.Type
-	Num      protowire.Number
-	Value    any
-}
-
 func Find(b []byte, nums ...uint32) *Field {
 	fields := FindN(b, 1, nums...)
 
@@ -59,9 +53,8 @@ func FindN(b []byte, limit int, nums ...uint32) []Field {
 		// deepest level of recursion
 		if num == protowire.Number(nums[0]) && len(nums) == 1 {
 			fields = append(fields, Field{
-				WireType: wireType,
-				Num:      num,
-				Value:    value,
+				wireType: wireType,
+				value:    value,
 			})
 		}
 	}
