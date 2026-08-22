@@ -234,16 +234,20 @@ func encodeField(field *protobufField) ([]byte, error) {
 	}
 
 	if field.fields != nil {
+		b = protowire.AppendTag(b, protowire.Number(field.num), protowire.BytesType)
+
+		var rawFields []byte
 		for _, subField := range field.fields {
-			b = protowire.AppendTag(b, protowire.Number(field.num), protowire.BytesType)
 
 			rawField, err := encodeField(subField)
 			if err != nil {
 				return nil, err
 			}
 
-			b = protowire.AppendBytes(b, rawField)
+			rawFields = append(rawFields, rawField...)
 		}
+
+		b = protowire.AppendBytes(b, rawFields)
 		return b, nil
 	}
 
