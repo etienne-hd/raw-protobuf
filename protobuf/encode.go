@@ -232,6 +232,10 @@ func encodeValue(num int32, value any) ([]byte, error) {
 		b = protowire.AppendTag(b, protowire.Number(num), protowire.BytesType)
 		b = protowire.AppendString(b, value)
 
+	case []byte:
+		b = protowire.AppendTag(b, protowire.Number(num), protowire.BytesType)
+		b = protowire.AppendBytes(b, value)
+
 	case float32:
 		b = protowire.AppendTag(b, protowire.Number(num), protowire.Fixed32Type)
 		b = protowire.AppendFixed32(b, math.Float32bits(value))
