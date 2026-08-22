@@ -76,6 +76,14 @@ func getValues(value any) []any {
 func makeField(num int32, value any) (*protobufField, error) {
 	v := reflect.ValueOf(value)
 
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return nil, errInvalidPointer
+		}
+		return makeField(num, v.Elem().Interface())
+	}
+
+	// struct
 	if v.Kind() == reflect.Struct {
 		subFields, err := parse(value)
 		if err != nil {
@@ -88,6 +96,7 @@ func makeField(num int32, value any) (*protobufField, error) {
 		}, nil
 	}
 
+	// []struct
 	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct {
 		field := &protobufField{
 			num:      num,
