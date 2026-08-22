@@ -1,6 +1,10 @@
 package protobuf
 
-import "google.golang.org/protobuf/encoding/protowire"
+import (
+	"math"
+
+	"google.golang.org/protobuf/encoding/protowire"
+)
 
 type Field struct {
 	wireType protowire.Type
@@ -19,12 +23,24 @@ func (f *Field) Int() uint64 {
 	return f.value.(uint64)
 }
 
+func (f *Field) Bool() bool {
+	if f.wireType != protowire.VarintType {
+		panic("Field.Bool() called on non-bool field")
+	}
+
+	if v := f.value.(uint64); v == 1 {
+		return true
+	} else {
+		return false
+	}
+}
+
 func (f *Field) Float32() float32 {
 	if f.wireType != protowire.Fixed32Type {
 		panic("Field.Float32() called on non-float32 field")
 	}
 
-	return f.value.(float32)
+	return math.Float32frombits(f.value.(uint32))
 }
 
 func (f *Field) Float64() float64 {
@@ -32,7 +48,7 @@ func (f *Field) Float64() float64 {
 		panic("Field.Float64() called on non-float64 field")
 	}
 
-	return f.value.(float64)
+	return math.Float64frombits(f.value.(uint64))
 }
 
 func (f *Field) String() string {
