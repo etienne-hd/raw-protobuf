@@ -5,8 +5,87 @@ import (
 	"reflect"
 )
 
-func decode(b []byte, value any) error {
-	v := reflect.ValueOf(value)
+func setFieldValue(v reflect.Value, field *Field) error {
+	switch v.Kind() {
+	case reflect.Int32, reflect.Int64:
+		v.SetInt(int64(field.Int()))
+
+	case reflect.Uint32, reflect.Uint64:
+		v.SetUint(uint64(field.Int()))
+
+	case reflect.Bool:
+		v.SetBool(field.Bool())
+
+	case reflect.String:
+		v.SetString(field.String())
+
+	case reflect.Float32:
+		v.SetFloat(float64(field.Float32()))
+
+	case reflect.Float64:
+		v.SetFloat(field.Float64())
+
+	case reflect.Struct:
+		decode(field.Bytes(), v.Addr())
+
+	default:
+		return fmt.Errorf("Invalid data type: %s", v.Kind())
+	}
+	return nil
+}
+
+func decodeField(b []byte, v reflect.Value, nums ...int32) error {
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		v = v.Elem()
+	}
+
+	if v.Kind() == reflect.Slice {
+		var fields []Field
+		fields = FindAll(b, nums...)
+		for _, field := range fields {
+			x := reflect.New(v.Type().Elem()).Elem()
+			if err := setFieldValue(x, &field); err != nil {
+				return err
+			}
+			v.Set(reflect.Append(v, x))
+		}
+		return nil
+	}
+
+	field := Find(b, nums...)
+	if field == nil {
+		return nil
+	}
+
+	return setFieldValue(v, field)
+}
+
+func decodeFields(b []byte, v reflect.Value) error {
+	t := v.Type()
+
+	for i := 0; i < t.NumField(); i++ {
+		nums, err := getNums(t.Field(i))
+		if err != nil {
+			return err
+		}
+
+		// No tag
+		if nums == nil {
+			continue
+		}
+
+		if err := decodeField(b, v.Field(i), nums...); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func decode(b []byte, v reflect.Value) error {
 	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return fmt.Errorf("decode: value must be a non-nil pointer")
 	}
@@ -22,58 +101,9 @@ func decode(b []byte, value any) error {
 		return fmt.Errorf("decode: expected struct, got %s", v.Kind())
 	}
 
-	t := v.Type()
-
-	for i := 0; i < t.NumField(); i++ {
-		nums, err := getNums(t.Field(i))
-		if err != nil {
-			return err
-		}
-
-		// No tag
-		if nums == nil {
-			continue
-		}
-
-		var field *Field
-		switch v.Field(i).Interface().(type) {
-		case int32, int64:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetInt(int64(field.Int()))
-			}
-		case uint32, uint64:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetUint(uint64(field.Int()))
-			}
-		case bool:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetBool(field.Bool())
-			}
-		case string:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetString(field.String())
-			}
-		case float32:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetFloat(float64(field.Float32()))
-			}
-		case float64:
-			field = Find(b, nums...)
-			if field != nil {
-				v.Field(i).SetFloat(field.Float64())
-			}
-		}
-
-	}
-
-	return nil
+	return decodeFields(b, v)
 }
 
 func Unmarshal(b []byte, value any) error {
-	return decode(b, value)
+	return decode(b, reflect.ValueOf(value))
 }
