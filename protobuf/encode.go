@@ -260,6 +260,20 @@ func encodeValue(num int32, value any) ([]byte, error) {
 	return b, nil
 }
 
+func sortedFields(fields protobufFields) []*protobufField {
+    result := make([]*protobufField, 0, len(fields))
+
+    for _, field := range fields {
+        result = append(result, field)
+    }
+
+    sort.Slice(result, func(i, j int) bool {
+        return result[i].id < result[j].id
+    })
+
+    return result
+}
+
 func encodeField(field *protobufField) ([]byte, error) {
 	var b []byte
 
@@ -279,7 +293,7 @@ func encodeField(field *protobufField) ([]byte, error) {
 		b = protowire.AppendTag(b, protowire.Number(field.num), protowire.BytesType)
 
 		var rawFields []byte
-		for _, subField := range field.fields {
+		for _, subField := range sortedFields(field.fields) {
 
 			rawField, err := encodeField(subField)
 			if err != nil {
@@ -310,17 +324,7 @@ func encodeField(field *protobufField) ([]byte, error) {
 func encode(fields protobufFields) ([]byte, error) {
 	b := []byte{}
 
-	sortedFields := make([]*protobufField, 0, len(fields))
-
-	for _, field := range fields {
-		sortedFields = append(sortedFields, field)
-	}
-
-	sort.Slice(sortedFields, func(i, j int) bool {
-		return sortedFields[i].id < sortedFields[j].id
-	})
-
-	for _, field := range sortedFields {
+	for _, field := range sortedFields(fields) {
 		encodedField, err := encodeField(field)
 		if err != nil {
 			return nil, err
