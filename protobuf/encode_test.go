@@ -7,12 +7,12 @@ import (
 func TestMarshal(t *testing.T) {
 	type Person struct {
 		Name string `num:"1"`
-		Age uint32 `num:"2"`
+		Age  uint32 `num:"2"`
 	}
 
 	person := Person{
 		Name: "Etienne",
-		Age: 20,
+		Age:  20,
 	}
 
 	b, err := Marshal(person)
