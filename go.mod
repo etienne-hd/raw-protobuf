@@ -1,4 +1,4 @@
-module github.com/etienne-hd/go-protobuf
+module github.com/etienne-hd/raw-protobuf
 
 go 1.26.5
 
