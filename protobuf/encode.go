@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,11 +21,14 @@ var (
 type protobufFields map[int32]*protobufField
 
 type protobufField struct {
+	id       uint32
 	num      int32
 	values   []any
 	fields   protobufFields
 	messages []protobufFields
 }
+
+var protobufFieldId uint32
 
 func getNums(t reflect.StructField) ([]int32, error) {
 	nums := []int32{}
@@ -83,6 +87,8 @@ func makeField(num int32, value any) (*protobufField, error) {
 		return makeField(num, v.Elem().Interface())
 	}
 
+	protobufFieldId += 1
+
 	// struct
 	if v.Kind() == reflect.Struct {
 		subFields, err := parse(value)
@@ -91,6 +97,7 @@ func makeField(num int32, value any) (*protobufField, error) {
 		}
 
 		return &protobufField{
+			id:       protobufFieldId,
 			num:      num,
 			messages: []protobufFields{subFields},
 		}, nil
@@ -99,6 +106,7 @@ func makeField(num int32, value any) (*protobufField, error) {
 	// []struct
 	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct {
 		field := &protobufField{
+			id:       protobufFieldId,
 			num:      num,
 			messages: make([]protobufFields, 0, v.Len()),
 		}
@@ -116,6 +124,7 @@ func makeField(num int32, value any) (*protobufField, error) {
 	}
 
 	return &protobufField{
+		id:     protobufFieldId,
 		num:    num,
 		values: getValues(value),
 	}, nil
@@ -301,7 +310,17 @@ func encodeField(field *protobufField) ([]byte, error) {
 func encode(fields protobufFields) ([]byte, error) {
 	b := []byte{}
 
+	sortedFields := make([]*protobufField, 0, len(fields))
+
 	for _, field := range fields {
+		sortedFields = append(sortedFields, field)
+	}
+
+	sort.Slice(sortedFields, func(i, j int) bool {
+		return sortedFields[i].id < sortedFields[j].id
+	})
+
+	for _, field := range sortedFields {
 		encodedField, err := encodeField(field)
 		if err != nil {
 			return nil, err
