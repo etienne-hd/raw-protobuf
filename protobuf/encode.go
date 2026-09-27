@@ -261,17 +261,17 @@ func encodeValue(num int32, value any) ([]byte, error) {
 }
 
 func sortedFields(fields protobufFields) []*protobufField {
-    result := make([]*protobufField, 0, len(fields))
+	result := make([]*protobufField, 0, len(fields))
 
-    for _, field := range fields {
-        result = append(result, field)
-    }
+	for _, field := range fields {
+		result = append(result, field)
+	}
 
-    sort.Slice(result, func(i, j int) bool {
-        return result[i].id < result[j].id
-    })
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].id < result[j].id
+	})
 
-    return result
+	return result
 }
 
 func encodeField(field *protobufField) ([]byte, error) {
