@@ -1,31 +1,12 @@
-package grpc
+package grpc_test
 
 import (
 	"bytes"
 	"encoding/binary"
 	"testing"
 
-	"github.com/etienne-hd/raw-protobuf/protobuf"
+	"github.com/etienne-hd/raw-protobuf/protobuf/grpc"
 )
-
-func generateProtobuf(t *testing.T) []byte {
-	t.Helper()
-
-	type Person struct {
-		Name string `num:"1"`
-		Age  uint32 `num:"2"`
-	}
-
-	payload, err := protobuf.Marshal(Person{
-		Name: "Etienne",
-		Age:  20,
-	})
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	return payload
-}
 
 func checkHeader(t *testing.T, header []byte, compressed bool, payloadLen uint32) {
 	t.Helper()
@@ -48,15 +29,15 @@ func checkHeader(t *testing.T, header []byte, compressed bool, payloadLen uint32
 func TestFrame(t *testing.T) {
 	tests := []struct {
 		name        string
-		compression Compression
+		compression grpc.Compression
 	}{
 		{
 			name:        "no compression",
-			compression: CompressionNone,
+			compression: grpc.CompressionNone,
 		},
 		{
 			name:        "gzip",
-			compression: CompressionGzip,
+			compression: grpc.CompressionGzip,
 		},
 	}
 
@@ -64,12 +45,12 @@ func TestFrame(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			payload := generateProtobuf(t)
 
-			framed, err := Frame(payload, tt.compression)
+			framed, err := grpc.Frame(payload, tt.compression)
 			if err != nil {
 				t.Fatalf("frame: %v", err)
 			}
 
-			compressed := tt.compression != CompressionNone
+			compressed := tt.compression != grpc.CompressionNone
 			checkHeader(t, framed[:5], compressed, uint32(len(framed[5:])))
 
 			if !compressed && !bytes.Equal(framed[5:], payload) {
