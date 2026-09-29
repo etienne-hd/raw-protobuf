@@ -1,6 +1,8 @@
 package protobuf
 
-import "google.golang.org/protobuf/encoding/protowire"
+import (
+	"google.golang.org/protobuf/encoding/protowire"
+)
 
 func Find(b []byte, nums ...int32) *Field {
 	fields := FindN(b, 1, nums...)
@@ -23,50 +25,62 @@ func FindN(b []byte, limit int, nums ...int32) []Field {
 		return fields
 	}
 
-	for len(b) != 0 && (limit == -1 || len(fields) < int(limit)) {
+	for len(b) != 0 && (limit == -1 || len(fields) < limit) {
 		num, wireType, n := protowire.ConsumeTag(b)
+		if n < 0 {
+			return fields
+		}
+
 		b = b[n:]
 
 		var value any
+
 		switch wireType {
 		case protowire.VarintType:
 			value, n = protowire.ConsumeVarint(b)
-			if n < 0 {
-				return fields
-			}
-			b = b[n:]
+
 		case protowire.Fixed32Type:
 			value, n = protowire.ConsumeFixed32(b)
-			if n < 0 {
-				return fields
-			}
-			b = b[n:]
+
 		case protowire.Fixed64Type:
 			value, n = protowire.ConsumeFixed64(b)
-			if n < 0 {
-				return fields
-			}
-			b = b[n:]
+
 		case protowire.BytesType:
 			value, n = protowire.ConsumeBytes(b)
-			if n < 0 {
-				return fields
-			}
 
-			if num == protowire.Number(nums[0]) && len(nums) > 1 {
-				fields = append(fields, FindN(b[:n], limit-len(fields), nums[1:]...)...)
-			}
-
-			b = b[n:]
+		default:
+			return fields
 		}
 
-		// deepest level of recursion
-		if num == protowire.Number(nums[0]) && len(nums) == 1 {
-			fields = append(fields, Field{
-				wireType: wireType,
-				value:    value,
-			})
+		if n < 0 {
+			return fields
 		}
+
+		b = b[n:]
+
+		if num != protowire.Number(nums[0]) {
+			continue
+		}
+
+		if len(nums) > 1 {
+			remaining := -1
+			if limit != -1 {
+				remaining = limit - len(fields)
+			}
+
+			fields = append(
+				fields,
+				FindN(value.([]byte), remaining, nums[1:]...)...,
+			)
+
+			continue
+		}
+
+		fields = append(fields, Field{
+			wireType: wireType,
+			value:    value,
+		})
 	}
+
 	return fields
 }
