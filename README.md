@@ -1,5 +1,8 @@
 # raw-protobuf
 
+![Go version](https://img.shields.io/github/go-mod/go-version/etienne-hd/raw-protobuf?style=for-the-badge)
+[![GitHub license](https://img.shields.io/github/license/etienne-hd/raw-protobuf?style=for-the-badge)](https://github.com/etienne-hd/raw-protobuf/blob/master/LICENSE)
+
 **Working with raw Protobuf has never been easier!**
 
 ```go
