@@ -31,15 +31,27 @@ func FindN(b []byte, limit int, nums ...int32) []Field {
 		switch wireType {
 		case protowire.VarintType:
 			value, n = protowire.ConsumeVarint(b)
+			if n < 0 {
+				return fields
+			}
 			b = b[n:]
 		case protowire.Fixed32Type:
 			value, n = protowire.ConsumeFixed32(b)
+			if n < 0 {
+				return fields
+			}
 			b = b[n:]
 		case protowire.Fixed64Type:
 			value, n = protowire.ConsumeFixed64(b)
+			if n < 0 {
+				return fields
+			}
 			b = b[n:]
 		case protowire.BytesType:
 			value, n = protowire.ConsumeBytes(b)
+			if n < 0 {
+				return fields
+			}
 
 			if num == protowire.Number(nums[0]) && len(nums) > 1 {
 				fields = append(fields, FindN(b[:n], limit-len(fields), nums[1:]...)...)
